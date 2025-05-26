@@ -1,4 +1,3 @@
-# Стадия сборки: pgvector
 FROM ubuntu:20.04 AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -25,7 +24,6 @@ RUN git clone --branch v0.8.0 https://github.com/pgvector/pgvector.git . && \
     make && \
     make install
 
-# Стадия выполнения: установка PostgreSQL и nginx
 FROM ubuntu:20.04
 ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -59,8 +57,4 @@ RUN chmod +x /init.sh && \
     chown -R postgres:postgres /var/lib/postgresql && \
     chown -R www-data:www-data /var/www/html
 
-CMD ["bash", "-c", \
-  "su - postgres -c '[ -f /var/lib/postgresql/data/PG_VERSION ] || /usr/lib/postgresql/15/bin/initdb -D /var/lib/postgresql/data' && \
-  su - postgres -c '/usr/lib/postgresql/15/bin/pg_ctl -D /var/lib/postgresql/data -w start' && \
-  /init.sh && \
-  nginx -g 'daemon off;'"]
+CMD ["/init.sh"]

@@ -1,7 +1,6 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
-# Конфигурационные параметры
 readonly DB_NAME="demo"
 readonly DB_USER="postgres"
 readonly TEST_USER="test"
@@ -11,48 +10,42 @@ readonly OUTPUT_DIR="/var/www/html"
 readonly CSV_FILE="${OUTPUT_DIR}/flights_march.csv"
 readonly HTML_FILE="${OUTPUT_DIR}/index.html"
 
-# Функция для выполнения SQL-запросов
-pg_exec() {
-    psql -U "${DB_USER}" -d postgres -v ON_ERROR_STOP=1 -c "$1"
-}
+initialize_postgres() {
+    echo "🛠 Инициализация PostgreSQL..."
 
-# Инициализация базы данных
-initialize_database() {
-    echo "🛠 Инициализация базы данных..."
+    if [ ! -f "/var/lib/postgresql/data/PG_VERSION" ]; then
+        su - postgres -c "/usr/lib/postgresql/15/bin/initdb -D /var/lib/postgresql/data"
 
-    # Завершаем активные подключения
-    pg_exec "SELECT pg_terminate_backend(pg_stat_activity.pid)
-             FROM pg_stat_activity
-             WHERE pg_stat_activity.datname = '${DB_NAME}';" || true
-
-    # Пересоздаем базу
-    pg_exec "DROP DATABASE IF EXISTS ${DB_NAME};"
-    pg_exec "CREATE DATABASE ${DB_NAME};"
-
-    # Импортируем данные
-    psql -U "${DB_USER}" -d "${DB_NAME}" -f "${SQL_SOURCE}"
-
-    # Создаем расширение
-    pg_exec "CREATE EXTENSION IF NOT EXISTS vector;"
-}
-
-# Основной скрипт
-main() {
-    # Проверка наличия SQL-файла
-    if [ ! -f "${SQL_SOURCE}" ]; then
-        echo "❌ Ошибка: SQL-файл не найден: ${SQL_SOURCE}"
-        exit 1
+        # Конфигурация PostgreSQL
+        echo "host all all 0.0.0.0/0 scram-sha-256" >> /var/lib/postgresql/data/pg_hba.conf
+        echo "listen_addresses = '*'" >> /var/lib/postgresql/data/postgresql.conf
     fi
 
-    # Подготовка каталогов
-    mkdir -p "${OUTPUT_DIR}"
-    chown -R www-data:www-data "${OUTPUT_DIR}"
+    # Запуск PostgreSQL в фоне
+    su - postgres -c "/usr/lib/postgresql/15/bin/postgres -D /var/lib/postgresql/data" &
 
-    # Очистка SQL-файла
-    sed -i '/DROP DATABASE/Id; /CREATE DATABASE/Id; /^\\connect/d' "${SQL_SOURCE}"
+    # Ожидание готовности
+    until pg_isready -U postgres -h 127.0.0.1; do
+        sleep 1
+    done
+}
 
-    # Инициализация БД
-    initialize_database
+start_nginx() {
+    echo "🌐 Запуск Nginx..."
+    nginx -g "daemon off;" &
+}
+
+setup_database() {
+    echo "🛢 Настройка базы данных..."
+
+    # Создание базы данных
+    psql -U postgres -c "CREATE DATABASE ${DB_NAME};" || true
+
+    # Импорт данных
+    psql -U postgres -d ${DB_NAME} -f "${SQL_SOURCE}"
+
+    # Создание расширения
+    psql -U postgres -d ${DB_NAME} -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
     # Создание пользователя
     echo "👤 Создание тестового пользователя..."
@@ -77,6 +70,10 @@ SQL
 
     # Генерация отчета
     generate_report
+
+    # Удержание контейнера активным
+    echo "✅ Все сервисы запущены. Контейнер активен."
+    tail -f /dev/null
 }
 
 # Генерация HTML-отчета
@@ -87,13 +84,6 @@ generate_report() {
     psqlc() {
         psql -U "${DB_USER}" -d "${DB_NAME}" -t -A -F',' -c "$1"
     }
-
-    # Сбор данных
-    local q1_res=$(psqlc "SELECT datname FROM pg_database WHERE datistemplate = false;")
-    local q2_res=$(psqlc "SELECT usename FROM pg_user;")
-    local q3_res=$(psqlc "SELECT grantee, privilege_type, table_name FROM information_schema.role_table_grants;")
-    local q4_res=$(psqlc "SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema = 'bookings';")
-    local q5_res=$(psqlc "SELECT COUNT(*) FROM flights WHERE scheduled_departure BETWEEN '2017-03-01' AND '2017-03-31';")
 
     # Создание HTML-файла
     cat > "${HTML_FILE}" <<-HTML
@@ -156,5 +146,20 @@ HTML
     echo "✅ Готово! Откройте http://localhost в браузере"
 }
 
+main() {
+    # Инициализация и запуск сервисов
+    initialize_postgres
+    start_nginx
+
+    # Настройка базы данных
+    setup_database
+
+    # Генерация отчетов
+    generate_report
+
+    # Поддержание работы контейнера
+    echo "✅ Все сервисы запущены"
+    tail -f /dev/null
+}
 # Запуск основного скрипта
 main
