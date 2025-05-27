@@ -49,6 +49,7 @@ RUN wget -qO - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add 
 COPY --from=builder /usr/lib/postgresql/15/lib/ /usr/lib/postgresql/15/lib/
 COPY --from=builder /usr/share/postgresql/15/extension/ /usr/share/postgresql/15/extension/
 COPY demo.sql /tmp/demo.sql
+COPY sql /sql
 COPY nginx.conf /etc/nginx/sites-available/default
 COPY init.sh /init.sh
 
@@ -56,5 +57,7 @@ RUN chmod +x /init.sh && \
     mkdir -p /var/lib/postgresql/data /var/www/html && \
     chown -R postgres:postgres /var/lib/postgresql && \
     chown -R www-data:www-data /var/www/html
+
+EXPOSE 5432 80
 
 CMD ["/init.sh"]

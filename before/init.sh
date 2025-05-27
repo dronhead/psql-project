@@ -9,6 +9,7 @@ readonly SQL_SOURCE="/tmp/demo.sql"
 readonly OUTPUT_DIR="/var/www/html"
 readonly CSV_FILE="${OUTPUT_DIR}/flights_march.csv"
 readonly HTML_FILE="${OUTPUT_DIR}/index.html"
+readonly SQL_SCRIPTS_DIR="/sql"
 
 initialize_postgres() {
     echo "🛠 Инициализация PostgreSQL..."
@@ -19,6 +20,7 @@ initialize_postgres() {
         # Конфигурация PostgreSQL
         echo "host all all 0.0.0.0/0 scram-sha-256" >> /var/lib/postgresql/data/pg_hba.conf
         echo "listen_addresses = '*'" >> /var/lib/postgresql/data/postgresql.conf
+        echo "max_wal_size = 1GB" >> /var/lib/postgresql/data/postgresql.conf
     fi
 
     # Запуск PostgreSQL в фоне
@@ -38,29 +40,16 @@ start_nginx() {
 setup_database() {
     echo "🛢 Настройка базы данных..."
 
-    # Создание базы данных
+    # Создание базы
     psql -U postgres -c "CREATE DATABASE ${DB_NAME};" || true
 
-    # Импорт данных
-    psql -U postgres -d ${DB_NAME} -f "${SQL_SOURCE}"
+    # Импорт основной схемы и данных
+    psql -U postgres -d "${DB_NAME}" -f "${SQL_SOURCE}"
 
-    # Создание расширения
-    psql -U postgres -d ${DB_NAME} -c "CREATE EXTENSION IF NOT EXISTS vector;"
+    # Выполнение всех SQL-запросов из отдельного файла
+    psql -U postgres -d "${DB_NAME}" -f "/sql/init.sql"
 
-    # Создание пользователя
-    echo "👤 Создание тестового пользователя..."
-    psql -U "${DB_USER}" -d "${DB_NAME}" <<-SQL
-        DO \$\$ BEGIN
-            IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='${TEST_USER}') THEN
-                CREATE USER ${TEST_USER} WITH PASSWORD '${TEST_PASS}';
-            END IF;
-        END \$\$;
-        GRANT CONNECT ON DATABASE ${DB_NAME} TO ${TEST_USER};
-        GRANT USAGE ON SCHEMA bookings TO ${TEST_USER};
-        GRANT SELECT ON ALL TABLES IN SCHEMA bookings TO ${TEST_USER};
-SQL
-
-    # Экспорт данных
+    #Экспорт CSV
     echo "📤 Экспорт CSV..."
     psql -U "${DB_USER}" -d "${DB_NAME}" -c "\copy (
         SELECT *
@@ -68,12 +57,7 @@ SQL
         WHERE scheduled_departure BETWEEN '2017-03-01' AND '2017-03-31'
     ) TO '${CSV_FILE}' WITH (FORMAT CSV, HEADER);"
 
-    # Генерация отчета
     generate_report
-
-    # Удержание контейнера активным
-    echo "✅ Все сервисы запущены. Контейнер активен."
-    tail -f /dev/null
 }
 
 # Генерация HTML-отчета
