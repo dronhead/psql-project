@@ -34,8 +34,7 @@ RUN apt-get update && \
     ca-certificates=202* \
     gnupg2=2.2* \
     lsb-release=11.1* \
-    unzip=6.0* \
-    nginx=1.18* && \
+    unzip=6.0*  && \
     rm -rf /var/lib/apt/lists/*
 
 RUN wget -qO - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - && \
@@ -50,7 +49,6 @@ COPY --from=builder /usr/lib/postgresql/15/lib/ /usr/lib/postgresql/15/lib/
 COPY --from=builder /usr/share/postgresql/15/extension/ /usr/share/postgresql/15/extension/
 COPY demo.sql /tmp/demo.sql
 COPY sql /sql
-COPY nginx.conf /etc/nginx/sites-available/default
 COPY init.sh /init.sh
 
 RUN chmod +x /init.sh && \
@@ -58,6 +56,6 @@ RUN chmod +x /init.sh && \
     chown -R postgres:postgres /var/lib/postgresql && \
     chown -R www-data:www-data /var/www/html
 
-EXPOSE 5432 80
+EXPOSE 5432
 
 CMD ["/init.sh"]

@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  db:
+    build: ./postgres
+    container_name: pgvector_demo_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - html_output:/var/www/html
+    networks:
+      - demo_net
+
+  web:
+    build: ./nginx
+    container_name: pgvector_demo_nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - html_output:/usr/share/nginx/html:ro
+    depends_on:
+      - db
+    networks:
+      - demo_net
+
+volumes:
+  db_data:
+  html_output:
+
+networks:
+  demo_net:

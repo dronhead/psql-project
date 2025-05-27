@@ -50,7 +50,6 @@ setup_database() {
     psql -U postgres -d "${DB_NAME}" -f "/sql/init.sql"
 
     #Экспорт CSV
-    echo "📤 Экспорт CSV..."
     psql -U "${DB_USER}" -d "${DB_NAME}" -c "\copy (
         SELECT *
         FROM flights
@@ -133,10 +132,10 @@ HTML
 main() {
     # Инициализация и запуск сервисов
     initialize_postgres
-    start_nginx
 
     # Настройка базы данных
     setup_database
+    start_nginx
 
     # Генерация отчетов
     generate_report
