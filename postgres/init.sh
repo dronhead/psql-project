@@ -126,7 +126,7 @@ GRANT SELECT ON ALL TABLES IN SCHEMA bookings TO ${TEST_USER};</pre>
 </html>
 HTML
 
-    echo "✅ Готово! Откройте http://localhost в браузере"
+    echo "✅ Готово! Откройте http://localhost:8080 в браузере"
 }
 
 main() {
